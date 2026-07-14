@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0.0",
+  "phase": "0-mvp",
+  "project": "thread_analysis",
+  "created_at": "2026-07-15T00:00:00Z",
+  "worktree": "plan/sns-thread-analysis",
+  "ambiguity_score": 3,
+  "value_score": 10.0,
+  "evidence_count": 1,
+  "scope": "solo-creator-threads-only",
+  "steps": [
+    {
+      "step": 0,
+      "name": "scaffold-cli-shell",
+      "title": "Scaffold skill directory + CLI shell",
+      "status": "pending",
+      "ambiguity_delta": 0.0
+    },
+    {
+      "step": 1,
+      "name": "threads-api-client",
+      "title": "Threads API client with OAuth + list-own-posts",
+      "status": "pending",
+      "ambiguity_delta": 0.0
+    },
+    {
+      "step": 2,
+      "name": "summary-generator",
+      "title": "Pure summary generator (topics, cadence, tone, top engagement)",
+      "status": "pending",
+      "ambiguity_delta": 0.0
+    },
+    {
+      "step": 3,
+      "name": "cli-wire-and-format",
+      "title": "Wire API + summary into `analyze-my-threads` CLI command with formatted output",
+      "status": "pending",
+      "ambiguity_delta": 0.0
+    },
+    {
+      "step": 4,
+      "name": "end-to-end-ac",
+      "title": "End-to-end AC verification: time-to-summary <2 min, output matches spec",
+      "status": "pending",
+      "ambiguity_delta": 0.0
+    }
+  ]
+}
