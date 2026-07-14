@@ -1,0 +1,32 @@
+{
+  "githooks": [
+    ".githooks/pre-push"
+  ],
+  "hooks": [
+    "hooks/worktree-guard.sh",
+    "hooks/task-detector.sh",
+    "hooks/session-start-check.sh",
+    "hooks/lib/worktree-detect.sh",
+    "hooks/hooks.json"
+  ],
+  "installed_at": "2026-07-14T03:45:22Z",
+  "installed_by": "dev-kit:ci-setup",
+  "rules": [
+    ".claude/rules/git-workflow.md"
+  ],
+  "runners": [
+    "ci.yml",
+    "auto-fix-pr.yml",
+    "review.yml"
+  ],
+  "schema_version": "1.0.0",
+  "scripts": [
+    "scripts/validate.py",
+    "scripts/test.sh",
+    "scripts/branch-policy.sh",
+    "scripts/ci-local.sh"
+  ],
+  "tests": [
+    "tests/test_worktree_guard.py"
+  ]
+}
