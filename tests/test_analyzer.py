@@ -32,3 +32,15 @@ def test_counts_replies_and_unique_participants() -> None:
 def test_missing_keys_raises_value_error() -> None:
     with pytest.raises(ValueError, match="missing required keys"):
         analyze("root-3", [{"author": "alice"}])
+
+
+def test_none_author_raises_value_error() -> None:
+    """Regression: key-presence check alone lets None slip through and crash later."""
+    with pytest.raises(ValueError, match="must be str"):
+        analyze("root-4", [{"author": None, "body": "hi"}])
+
+
+def test_none_body_raises_value_error() -> None:
+    """Regression: None body previously slipped past key-presence and raised TypeError."""
+    with pytest.raises(ValueError, match="must be str"):
+        analyze("root-5", [{"author": "alice", "body": None}])

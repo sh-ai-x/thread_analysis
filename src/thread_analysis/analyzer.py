@@ -37,6 +37,11 @@ def analyze(root_id: str, replies: list[dict]) -> ThreadStats:
     for r in replies:
         if "author" not in r or "body" not in r:
             raise ValueError(f"reply missing required keys: {sorted(r)}")
+        if not isinstance(r["author"], str) or not isinstance(r["body"], str):
+            raise ValueError(
+                f"reply author/body must be str, got author={type(r['author']).__name__} "
+                f"body={type(r['body']).__name__}"
+            )
 
     participants = {r["author"] for r in replies}
     longest = max(len(r["body"]) for r in replies)
