@@ -48,3 +48,26 @@
 
 - 1 persona × 1 user × 1 platform (Threads) = single-loop build. No need for 3 evidence sources across 3 personas.
 - The deal: user accepted "narrow to solo creator only" as the trade-off for the missing market/community signals. Marketing-analyst and researcher modes are **out of scope** for v0 (deferred to non-goals).
+
+# gate-3 cycle 6 (non-goals)
+
+- **Non-goals count**: 6 (NG1–NG6), all with rationale + breach-response per item.
+- Canonical: NG1=no-Instagram, NG2=no-cross-account/marketing-mode, NG3=no-storage, NG4=no-generation, NG5=no-scheduler, NG6=no-multi-user.
+- See `PRD.md` §3 for the table.
+
+# gate-4 cycle 7 (decompose)
+
+- **Phase**: `0-mvp` — 5 steps emitted (`step0.md` … `step4.md`).
+- **Ordering**: dependency-first (data shape → data plane → pure logic → wiring → e2e verification).
+- **Worktree base**: `plan/sns-thread-analysis` (single cumulative branch — see `.dev-kit/hand-off/plan→build.md` for the rationale over a per-step-worktree strategy).
+
+# gate-5 cycle 8 (emit)
+
+- **Artifacts written**:
+  - `PRD.md` (6 sections; §1–§6 DoD pass)
+  - `phases/0-mvp/index.json` + 5 step files (`step0.md` … `step4.md`)
+  - `.prd/decision-log.md` (this file)
+  - `.dev-kit/loop-log.json` (cycle accounting aligned to this log)
+  - `.dev-kit/hand-off/plan→build.md` (build-runner briefing)
+- **Hand-off**: `/dev-kit:build` (next invocation).
+- **Stage transition**: `state_codec.transition_stage(root, "build")` will apply automatically on build-runner invocation.

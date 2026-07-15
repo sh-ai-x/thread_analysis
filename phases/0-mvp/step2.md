@@ -22,6 +22,7 @@ File paths to create:
     - `avg_gap_hours`: mean gap between consecutive posts in hours. If <2 posts, return 0.0. Use `created_at` ordering (most-recent first, so reverse to chronological for the gap math).
     - `tone_tags`: fixed taxonomy of ≤5 tags chosen deterministically by simple heuristics on the corpus (e.g. high-reply ratio → "discussion"; short avg length → "punchy"; many questions → "ask-me-anything"). Document the heuristics in module docstring. No LLM.
     - `top_engagement`: top-N posts by `(like_count + 2*reply_count + 3*repost_count)`, tie-break by `created_at` desc.
+    - `topic_counts`: `dict[str, int]` mapping each keyword in `top_topics` to its corpus frequency. Same ordering as `top_topics` (count desc, then alpha asc) reflected by the top-N subset; the underlying full corpus frequency is what `topic_counts` exposes.
   - `STOPWORDS: frozenset[str]` — small built-in English stopword set (~100 words). No NLTK download.
   - `def _tokenize(text: str) -> list[str]` — lowercase, regex `[a-z]{3,}`, return list. (No stemming in v0.)
   - `def _tone_tags(posts: list[Post]) -> list[str]` — heuristic; deterministic.
@@ -32,6 +33,7 @@ File paths to create:
   - `test_avg_gap_hours_two_posts` — two posts 6 hours apart → `avg_gap_hours=6.0`.
   - `test_top_topics_frequency` — feed with repeated keywords → top topics sorted by count desc, alpha tiebreak asc.
   - `test_top_topics_stopwords_filtered` — common stopwords ("the", "and", "is") never appear.
+  - `test_topic_counts_populated` — feed with repeated keywords → `summary.topic_counts` maps each `top_topics` keyword to its corpus frequency (== the count that placed it on the top-N list).
   - `test_top_engagement_weighted` — post with high reply_count beats one with high like_count at the same weight tier.
   - `test_tone_tags_deterministic` — same input → same output across two calls.
   - `test_short_texts_tone_tag` — short avg length → `"punchy"` present.

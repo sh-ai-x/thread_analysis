@@ -20,7 +20,7 @@ File paths to create:
   - `__all__ = ["cli_main", "Post", "Summary"]` — exports the data shapes that steps 1+ will populate.
   - `Post` and `Summary` as `dataclass(frozen=True)` stubs with the fields below (so step 1/2 can extend without renaming):
     - `Post`: `id: str`, `text: str`, `created_at: datetime`, `like_count: int`, `reply_count: int`, `repost_count: int`
-    - `Summary`: `post_count: int`, `top_topics: list[str]`, `avg_gap_hours: float`, `tone_tags: list[str]`, `top_engagement: list[Post]`
+    - `Summary`: `post_count: int`, `top_topics: list[str]`, `topic_counts: dict[str, int]`, `avg_gap_hours: float`, `tone_tags: list[str]`, `top_engagement: list[Post]`
 - `tests/test_sns_analyzer.py` — at minimum:
   - `test_cli_help_exits_zero` — `cli_main(["--help"])` returns 0.
   - `test_cli_no_args_exits_zero` — `cli_main([])` returns 0 and prints "not yet implemented".

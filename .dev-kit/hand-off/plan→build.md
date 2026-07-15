@@ -29,9 +29,11 @@ Claude Code skill for solo creator self-analysis of own Threads posts. v0 = "Pul
 
 The runner will:
 1. Read `phases/0-mvp/index.json`.
-2. For each step in order, cut a worktree `<worktree_base>-step<N>` (= `plan/sns-thread-analysis-step0` ... `step4`).
+2. **Operate on a single cumulative worktree** — checks out `plan/sns-thread-analysis` directly (no per-step worktree cut). After each step's AC passes and `index.json` is updated, the runner fast-forwards the same branch on origin (`git push origin HEAD`) so step N+1 begins with a working tree that includes step N's commits.
+   - **Why cumulative and not per-step-worktree:** the per-step-worktree strategy (e.g. `plan/sns-thread-analysis-step0` … `step4`) cannot carry step N-1's commits into the step N worktree without an extra merge/cherry-pick between phases, which adds a layer of branch-management the v0 plan does not need. A single cumulative branch keeps the run audit trail in one linear history and makes the final PR diff exactly equal to the cumulative step history.
+   - **Trade-off:** the runner's working tree is shared across all steps. It MUST run tests + commit + push before advancing; partial state from a failed step pollutes step N+1's AC baseline. Per iron law L1, this is enforced by the tdd-guard hook (red→green guard never advances on red).
 3. Execute the per-step TDD cycle from `phases/0-mvp/step<N>.md`.
-4. Capture status markers, update `index.json`, advance.
+4. Capture status markers, update `index.json`, advance to step N+1.
 
 ## What the build runner MUST honor
 
