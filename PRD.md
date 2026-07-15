@@ -95,3 +95,13 @@ Preconditions for `/dev-kit:build`:
 - `.dev-kit/loop-log.json` records the 5 narrowing cycles — done.
 
 Stage transition: `state_codec.transition_stage(root, "build")` will be applied automatically by the build runner on invocation.
+
+## §4.1 Build-system note: runner contract scope
+
+The dev-kit plugin's build runner (`~/.claude/plugins/cache/dev-kit/dev-kit/<v>/lib/execute.py`) is **out of scope for this PRD's product surface**. The product is the SNS analyzer; the runner is the harness that drives sub-agents through the phase steps.
+
+In v0, the runner reads each step's status from `phases/0-mvp/index.json` plus the sub-agent's exit code. It does **not** parse HTML-comment markers; that capability (`parse_status_marker`) ships in a separate follow-up PR against the dev-kit plugin, not in this repository. Phase files document the marker format for forward compatibility only.
+
+Why this matters for reviewers:
+- "non-goal NG1–NG6" in §3 are user-facing scope fences (no Instagram, no cross-account, no storage, no generation, no scheduler, no multi-user).
+- The runner-contract scope is a build-time fence: `lib/execute.py:parse_status_marker` is owned upstream of this repo and not deliverable here.
