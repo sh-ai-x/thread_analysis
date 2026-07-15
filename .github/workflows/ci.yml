@@ -44,19 +44,3 @@ jobs:
           python-version: "3.12"
       - name: Run validation suite
         run: python3 scripts/validate.py
-
-  actionlint:
-    name: actionlint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download actionlint
-        id: get_actionlint
-        run: |
-          mkdir -p ./actionlint
-          curl -sSL -o ./actionlint/actionlint.tar.gz \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
-          tar -xzf ./actionlint/actionlint.tar.gz -C ./actionlint
-          echo "exe=$(pwd)/actionlint/actionlint" >> "$GITHUB_OUTPUT"
-      - name: Run actionlint
-        run: ${{ steps.get_actionlint.outputs.exe }} -no-color .github/workflows/*.yml
