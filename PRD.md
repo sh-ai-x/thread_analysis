@@ -67,7 +67,7 @@ Phase: **`0-mvp`** — see `phases/0-mvp/index.json`.
 | 3 | Wire API + summary into `analyze-my-threads` CLI command with formatted output | `phases/0-mvp/step3.md` |
 | 4 | End-to-end AC verification: time-to-summary <2 min, output matches spec | `phases/0-mvp/step4.md` |
 
-Worktree base: `plan/sns-thread-analysis` (current branch). The build runner derives per-step worktrees as `plan/sns-thread-analysis-step{N}`.
+Worktree base: `plan/sns-thread-analysis` (cumulative single branch — the runner checks out this branch directly; see `.dev-kit/hand-off/plan→build.md` for the rationale over a per-step-worktree strategy that cannot carry step N-1's commits without an extra merge layer).
 
 Ordering rationale: dependency-first. Data shapes (step 0) → data plane (step 1) → pure logic (step 2) → wiring (step 3) → end-to-end verification (step 4).
 

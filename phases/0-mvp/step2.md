@@ -28,7 +28,7 @@ File paths to create:
   - `def _tone_tags(posts: list[Post]) -> list[str]` — heuristic; deterministic.
 
 - `tests/test_sns_summarizer.py` — unit tests:
-  - `test_empty_posts` — empty list → `Summary(post_count=0, top_topics=[], avg_gap_hours=0.0, tone_tags=[], top_engagement=[])`.
+  - `test_empty_posts` — empty list → `Summary(post_count=0, top_topics=[], topic_counts={}, avg_gap_hours=0.0, tone_tags=[], top_engagement=[])`. (The `topic_counts={}` field is required since step 0 added it to the `Summary` dataclass; omitting it raises `TypeError` before any assertion runs.)
   - `test_single_post` — 1 post → `avg_gap_hours=0.0`, `top_engagement` contains it.
   - `test_avg_gap_hours_two_posts` — two posts 6 hours apart → `avg_gap_hours=6.0`.
   - `test_top_topics_frequency` — feed with repeated keywords → top topics sorted by count desc, alpha tiebreak asc.
@@ -62,9 +62,21 @@ import ast, pathlib
 src = pathlib.Path('src/thread_analysis/sns_summarizer.py').read_text()
 tree = ast.parse(src)
 
-# (a) forbidden by top-level import
+# (a) forbidden by import — must record both `ast.Import` and `ast.ImportFrom`
+#     source modules. `from urllib.request import urlopen` would otherwise slip
+#     past because `n.name` is just 'urlopen'.
 forbidden_imports = {'requests', 'urllib', 'urllib3', 'httpx', 'subprocess'}
-imports = {n.name.split('.')[0] for x in ast.walk(tree) if isinstance(x, (ast.Import, ast.ImportFrom)) for n in x.names}
+imports = set()
+for x in ast.walk(tree):
+    if isinstance(x, ast.Import):
+        for n in x.names:
+            imports.add(n.name.split('.')[0])          # 'import urllib.request' -> 'urllib'
+    elif isinstance(x, ast.ImportFrom):
+        src_mod = (x.module or '').split('.')[0]       # 'from urllib.request import …' -> 'urllib'
+        if src_mod:
+            imports.add(src_mod)
+        for n in x.names:
+            imports.add(n.name.split('.')[0])          # also catch 'from foo import bar' forbidden alias
 imp_leak = imports & forbidden_imports
 assert not imp_leak, f'forbidden import: {sorted(imp_leak)}'
 

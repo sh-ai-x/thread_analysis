@@ -32,12 +32,13 @@ Wire the API client (step 1) and the summary generator (step 2) into `cli_main` 
   - Section 5: `Total posts analyzed: N`
 - Output (`json`): the raw `Summary` object, JSON-serialized.
 - Exit codes: 0 on success, 1 on auth error, 2 on API error, 64 on usage error (invalid flag; `--help` itself exits 0).
+  - **argparse translate**: `argparse.parse_args` raises `SystemExit(0)` for `--help` and `SystemExit(2)` for usage errors; that breaks the documented `0 / 64` contract. `cli_main` MUST wrap `parser.parse_args(argv)` in `try/except SystemExit as e` and translate: `e.code == 0` → return `0` after printing the help text; `e.code == 2` → print the usage error to stderr and return `64`. Add a regression test `test_cli_help_exits_zero_via_translate` and `test_cli_invalid_flag_exits_64`.
 
 File paths to create / modify:
 - `src/thread_analysis/sns_analyzer.py` — extend `cli_main` to:
-  - parse argv (use `argparse`)
+  - parse argv (use `argparse`) with the SystemExit translate above
   - load or bootstrap token via `ThreadsAuth` + `load_token(path=...)`
-  - construct `ThreadsClient`, call `list_own_posts(limit=args.limit)`
+  - construct `ThreadsClient`, call `list_own_posts(limit=args.limit)` — UNLESS `posts_loader` is provided
   - call `summarize(posts)`
   - render output per `--output` choice
   - return the right exit code
@@ -49,23 +50,24 @@ File paths to create / modify:
         client_factory: Callable[[ThreadsToken], ThreadsClient] | None = None,
         token_loader: Callable[[Path | None], ThreadsToken | None] | None = None,
         token_persister: Callable[[ThreadsToken, Path | None], Path] | None = None,
+        posts_loader: Callable[[int], list[Post]] | None = None,
     ) -> int
     ```
     - `client_factory`: defaults to `ThreadsClient` (uses the real injected HTTP client seam from step 1).
     - `token_loader`: defaults to `load_token`.
     - `token_persister`: defaults to `persist_token`. Used by the bootstrap flow.
+    - `posts_loader`: when provided, BYPASSES auth + token load + ThreadsClient construction entirely. `cli_main` calls `posts_loader(args.limit)` and treats the result as the `list[Post]` to summarize. This is the seam step 4's offline AC3b uses; without it, step 4 would have to inject a valid `ThreadsToken` AND a working `client_factory` to drive `cli_main` end-to-end, which couples the test to step 1's wiring.
 - `src/thread_analysis/sns_output.py` (new) — `format_text(summary: Summary) -> str`, `format_json(summary: Summary) -> str`. Pure functions. Unit-testable. `format_text` uses `summary.topic_counts` for Section 1.
 - `tests/test_sns_output.py` (new) — unit tests for both formatters; assert Section 1 renders `(count)` from `topic_counts`.
-- `tests/test_sns_analyzer.py` (extend) — add `test_cli_with_injected_token` that constructs a fake `ThreadsClient` returning a fixture post list, asserts `cli_main([])` returns 0, asserts the output contains all five section headers.
-- Inject seams: see signatures above. Document in the docstring.
+- `tests/test_sns_analyzer.py` (extend) — add `test_cli_with_injected_token`, `test_cli_help_exits_zero_via_translate`, `test_cli_invalid_flag_exits_64`.
 
 Non-negotiable rules:
 - TDD: tests first. Cover the formatters + the wired CLI with injected fakes.
-- Idempotency: re-running produces the same output (no timestamps, no random IDs in the formatter output).
+- Idempotency: re-running produces the same output (no timestamps, no random IDs).
 - Do NOT add a JSONL log, DB, or scheduled runs.
 - Do NOT add Instagram support (non-goal NG1).
-- Backward compat: `cli_main(["--help"])` from step 0 must still exit 0 (regression test required).
-- `--no-auth-bootstrap` MUST exit non-zero (code 1) when no token file exists. AC6 must capture and assert this.
+- Backward compat: `cli_main(["--help"])` from step 0 must still exit 0.
+- `--no-auth-bootstrap` MUST exit with code 1 when no token file exists at the resolved `--token-path` (default `~/.config/thread-analysis/sns-token.json`, override via env `THREAD_ANALYSIS_TOKEN_PATH` or the flag). AC6 verifies this with a `--token-path` pointing at a fresh `mktemp -d` directory so the test is independent of the developer's machine state.
 
 ## Acceptance Criteria
 ```bash
@@ -75,21 +77,23 @@ python -c "from thread_analysis.sns_analyzer import cli_main; from thread_analys
 # AC2: formatter unit tests pass
 pytest tests/test_sns_output.py -v
 
-# AC3: extended CLI tests pass (including --help regression from step 0)
+# AC3: extended CLI tests pass (including --help regression from step 0 + SystemExit translate + posts_loader seam)
 pytest tests/test_sns_analyzer.py -v
 
 # AC4: full suite green
 pytest tests/ -v
 
-# AC5: --help still exits 0 (argparse default)
+# AC5: --help still exits 0 (argparse default, translated through SystemExit catch)
 python -m thread_analysis.sns_analyzer --help >/dev/null
 rc=$?
 [ "$rc" -eq 0 ] && echo "OK (rc=$rc)" || { echo "FAIL: --help exited $rc"; exit 1; }
 
-# AC6: --no-auth-bootstrap with no token exits non-zero (cap $? from the python invocation, not the pipe)
-python -m thread_analysis.sns_analyzer --no-auth-bootstrap --limit 1 2>&1 | head -3
+# AC6: --no-auth-bootstrap with a NON-EXISTENT --token-path exits 1 (machine-state-independent)
+tmp=$(mktemp -d)
+python -m thread_analysis.sns_analyzer --no-auth-bootstrap --token-path "$tmp/missing.json" --limit 1 2>&1 | head -3
 rc=${PIPESTATUS[0]}
-[ "$rc" -ne 0 ] && echo "OK (rc=$rc, expected non-zero)" || { echo "FAIL: expected non-zero exit on missing token, got rc=$rc"; exit 1; }
+rm -rf "$tmp"
+[ "$rc" -eq 1 ] && echo "OK (rc=$rc, expected auth error=1)" || { echo "FAIL: expected rc=1 on missing token, got rc=$rc"; exit 1; }
 ```
 
 ## Verification & Status Update (REQUIRED before claiming done)
@@ -130,3 +134,5 @@ rc=${PIPESTATUS[0]}
 - Do NOT break the step-0 contract: `cli_main(["--help"])` MUST still exit 0. Reason: backward compat within the phase.
 - Do NOT print timestamps or random IDs in the formatter output. Reason: idempotency + deterministic tests.
 - Do NOT lose `rc` from the python invocation in AC6. Reason: the `| head -3` pipe discards `$?` unless captured via `PIPESTATUS[0]`.
+- Do NOT tie AC6 to the developer's `~/.config/thread-analysis/sns-token.json`. Reason: the test must pass on a fresh checkout where no token file exists. Use `mktemp -d` + `--token-path`.
+- Do NOT let `argparse.parse_args` propagate `SystemExit` raw. Reason: that breaks the documented `0 / 64` exit-code contract — must translate through the try/except wrapper.

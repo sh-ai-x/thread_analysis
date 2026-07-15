@@ -7,7 +7,7 @@
 - `/PRD.md`
 - `/CLAUDE.md`
 - `/pyproject.toml`
-- `/src/thread_analysis/sns_analyzer.py` (cli_main with seam signatures from step 3)
+- `/src/thread_analysis/sns_analyzer.py` (cli_main with seam signatures from step 3, including `posts_loader`)
 - `/src/thread_analysis/sns_client.py` (ThreadsClient + ThreadsAuth from step 1)
 - `/src/thread_analysis/sns_summarizer.py` (summarize from step 2)
 - `/src/thread_analysis/sns_output.py` (format_text, format_json from step 3)
@@ -18,15 +18,15 @@
 Verify the full pipeline against the PRD's AC. Two-track verification:
 
 Track A — **deterministic** (runs in CI without a real Threads account):
-- Build a fixture of 20 representative `Post` records (mix of topics, lengths, engagement values, timestamps). Save as `tests/fixtures/sns_20_posts.json`.
+- Build a fixture of 20 representative `Post` records (mix of topics, lengths, engagement values, timestamps). Save as `tests/fixtures/sns_20_posts.json`. The JSON schema matches the `Post` dataclass field-for-field: `id`, `text`, `created_at` (ISO-8601 string), `like_count`, `reply_count`, `repost_count`.
 - Add `tests/test_sns_e2e.py` that:
   1. Loads the fixture.
-  2. Constructs a `ThreadsClient` whose `list_own_posts` returns the fixture (inject via the `http` client seam from step 1, OR by monkeypatching `ThreadsClient.list_own_posts` in the test).
-  3. Builds a fake `token_loader` that returns `None` (no token on disk) and a fake `token_persister` that no-ops. Plus a `client_factory` that wraps the fixture-returning client.
-  4. Calls `cli_main(['--limit', '20', '--no-auth-bootstrap'], client_factory=…, token_loader=…)` and asserts `rc == 0`. The `--no-auth-bootstrap` flag disables interactive OAuth; the injected `token_loader` short-circuits token loading; the injected `client_factory` returns the fixture client so `list_own_posts` never touches the network.
-  5. Asserts all 5 section headers present in the captured output, asserts `Total posts analyzed: 20`.
-  6. Asserts `format_text(summary)` round-trips a known golden file `tests/fixtures/sns_expected_text.txt`. Update the golden if format changed during step 3; commit both.
-- Wall-clock measurement: time `cli_main(['--limit','20','--no-auth-bootstrap'], client_factory=…, token_loader=…)` end-to-end with the injected fixture, assert wall-clock < 5 seconds. **Time the wired CLI, NOT just `summarize(posts)` in isolation** — a regression in cli orchestration / formatting / IO would be invisible otherwise.
+  2. **Parses each fixture record into a `Post` instance**: `[Post(**{**r, "created_at": datetime.fromisoformat(r["created_at"])}) for r in raw]`. `list_own_posts` MUST return `list[Post]`, not raw dicts — `summarize(posts)` accesses `post.text` / `post.created_at` attributes (not dict keys), so returning dicts raises `AttributeError` before any assertion runs.
+  3. Constructs a fake `posts_loader` that returns the `list[Post]` for any limit. Injects via the new step-3 seam; no token, no HTTP client.
+  4. Calls `cli_main(['--limit', '20', '--no-auth-bootstrap', '--token-path', '<tmp>/missing.json'], posts_loader=…)` and asserts `rc == 0`. The injection is end-to-end offline.
+  5. Asserts all 5 section headers present in the captured output; asserts `Total posts analyzed: 20`.
+  6. Asserts `format_text(summary)` round-trips a known golden file `tests/fixtures/sns_expected_text.txt`. Update the golden if the format changed during step 3; commit both.
+- Wall-clock measurement: time `cli_main(['--limit','20','--no-auth-bootstrap','--token-path','<tmp>/missing.json'], posts_loader=…)` end-to-end with the injected fixture, assert wall-clock < 5 seconds. **Time the wired CLI, NOT just `summarize(posts)` in isolation** — a regression in cli orchestration / formatting / IO would be invisible otherwise.
 
 Track B — **manual / live** (NOT in CI):
 - Document in `docs/SNS_RUNBOOK.md` (new file):
@@ -45,9 +45,9 @@ Track B — **manual / live** (NOT in CI):
     A `scripts/log_incident.py` helper is provided to append a redacted entry; the script must redact any token-shaped string (`/[A-Za-z0-9_-]{20,}/`) before writing.
 
 File paths to create:
-- `tests/fixtures/sns_20_posts.json` — 20 representative Post records.
+- `tests/fixtures/sns_20_posts.json` — 20 representative Post records (one per line of the JSON, schema matches the dataclass).
 - `tests/fixtures/sns_expected_text.txt` — golden output for the format test.
-- `tests/test_sns_e2e.py` — Track A test.
+- `tests/test_sns_e2e.py` — Track A test (uses `posts_loader` to drive `cli_main` end-to-end offline).
 - `docs/SNS_RUNBOOK.md` — Track B manual runbook.
 - `scripts/log_incident.py` — helper that appends a redacted incident entry to `docs/SNS_RUNBOOK.md`.
 - Update `README.md` with a "SNS Analyzer" section: 1-paragraph what-it-does, the command, link to `docs/SNS_RUNBOOK.md`.
@@ -58,62 +58,59 @@ Non-negotiable rules:
 - Do NOT record a real access token in `docs/SNS_RUNBOOK.md`, fixtures, or any incident log. Reason: secret-scan.
 - Do NOT change `cli_main` or `summarize` signatures in this step — this is verification, not refactor.
 - Do NOT add Instagram or any other platform (non-goal NG1).
-- Track A MUST run fully offline (no token file, no network). AC3 enforces this via `--no-auth-bootstrap` + injected seams.
+- Track A MUST run fully offline (no token file, no network). AC3a + AC3b enforce this via `--no-auth-bootstrap` + `--token-path <tmp>/missing.json` + injected `posts_loader`.
 
 ## Acceptance Criteria
 ```bash
-# AC1: e2e test passes
+# AC1: e2e test passes (uses posts_loader seam; offline)
 pytest tests/test_sns_e2e.py -v
 
 # AC2: full suite green
 pytest tests/ -v
 
-# AC3: end-to-end cli_main with injected 20-post fixture completes offline in <5s
+# AC3a: --no-auth-bootstrap with no token + injected token_loader=None exits with rc=1 (auth error)
+# (Machine-state-independent: uses mktemp -d for the token path, not ~/.config.)
+tmp=$(mktemp -d)
+python -c "
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+from pathlib import Path
+from thread_analysis.sns_analyzer import cli_main
+
+rc = cli_main(
+    ['--no-auth-bootstrap', '--token-path', '$tmp/missing.json', '--limit', '1'],
+    token_loader=lambda path: None,
+)
+import sys
+sys.exit(0 if rc == 1 else 1)
+"
+ac_rc=$?
+rm -rf "$tmp"
+[ "$ac_rc" -eq 0 ] && echo "OK (rc=1, expected auth error)" || { echo "FAIL: expected rc=1 on missing token, got ac_rc=$ac_rc"; exit 1; }
+
+# AC3b: cli_main end-to-end wall-clock <5s, with injected posts_loader returning list[Post]
+tmp=$(mktemp -d)
 python -c "
 import json, time
 from datetime import datetime
 from pathlib import Path
 from thread_analysis.sns_analyzer import cli_main
-from thread_analysis import sns_client
+from thread_analysis.sns_analyzer import Post
 
 raw = json.loads(Path('tests/fixtures/sns_20_posts.json').read_text())
-posts = [{**p, 'created_at': datetime.fromisoformat(p['created_at'])} for p in raw]
-
-# Inject via monkeypatch: replace list_own_posts on the live class.
-def _fake_list(self, limit=20):
-    return posts[:limit]
-sns_client.ThreadsClient.list_own_posts = _fake_list
-
-# No token on disk and no auth: --no-auth-bootstrap makes cli_main fail
-# at the token-load step UNLESS we inject a token_loader that returns None + skip.
-# Per step 3 spec, the cli_main accepts token_loader= callables that return
-# None on miss; combined with --no-auth-bootstrap, the test exercises the
-# injection seam directly: we call a private render path that bypasses auth.
-def _cli_no_auth(argv, *, client_factory=None, token_loader=None, token_persister=None):
-    # The AC3 framing: cli_main called with --no-auth-bootstrap and an injected
-    # token_loader that returns None must fail with rc=1 (auth error). For
-    # the wall-clock timing we must instead inject a fake token via token_loader
-    # so the flow proceeds to list_own_posts.
-    from thread_analysis.sns_client import ThreadsToken
-    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
-    fake_tok = ThreadsToken(
-        access_token='FAKE_TOKEN_' + 'x' * 8,
-        expires_at=_dt.now(_tz.utc) + _td(hours=1),
-        user_id='0',
-    )
-    return cli_main(
-        ['--limit', '20', '--no-auth-bootstrap'],
-        client_factory=lambda tok: sns_client.ThreadsClient.__new__(sns_client.ThreadsClient),
-        token_loader=lambda path: fake_tok,
-    )
+posts = [Post(**{**r, 'created_at': datetime.fromisoformat(r['created_at'])}) for r in raw]
 
 t0 = time.perf_counter()
-rc = _cli_no_auth(['--limit', '20'])
+rc = cli_main(
+    ['--limit', '20', '--no-auth-bootstrap', '--token-path', '$tmp/missing.json'],
+    posts_loader=lambda limit: posts[:limit],
+)
 elapsed = time.perf_counter() - t0
-assert rc == 0, f'cli_main exit={rc}'
-assert elapsed < 5.0, f'too slow: {elapsed:.3f}s'
-print(f'OK elapsed={elapsed:.3f}s')
+import sys
+sys.exit(0 if (rc == 0 and elapsed < 5.0) else 1)
 "
+ac_rc=$?
+rm -rf "$tmp"
+[ "$ac_rc" -eq 0 ] && echo "OK (elapsed check)" || { echo "FAIL: cli_main did not complete cleanly within 5s budget"; exit 1; }
 
 # AC4: golden text file exists and is non-empty
 test -s tests/fixtures/sns_expected_text.txt && echo "OK"
@@ -147,6 +144,8 @@ test -f scripts/log_incident.py && grep -q 're\.sub' scripts/log_incident.py && 
 - Do NOT change `cli_main` or `summarize` signatures in this step. Reason: this is verification, not refactor.
 - Do NOT add storage, scheduling, or Instagram support. Reason: non-goals NG1/NG3/NG4.
 - Do NOT skip the runbook. Reason: Track B is the only path that proves the PRD's <2-min target.
-- Do NOT time `summarize(posts)` in isolation in AC3. Reason: cli orchestration / formatting / IO regressions would be invisible. The AC must time `cli_main` end-to-end with the injected fixture.
-- Do NOT paste raw stderr into `docs/SNS_RUNBOOK.md`. Reason: stderr can carry a real access token; secret-scan will fail. Use the redacted incident-log schema above + `scripts/log_incident.py`.
+- Do NOT time `summarize(posts)` in isolation. Reason: cli orchestration / formatting / IO regressions would be invisible. The AC must time `cli_main` end-to-end with the injected fixture.
+- Do NOT paste raw stderr into `docs/SNS_RUNBOOK.md`. Reason: stderr can carry a real access token; secret-scan will fail.
 - Do NOT silently update the golden text file. If it changed, document the why in the step summary.
+- Do NOT return raw dicts from `list_own_posts` in the fixture. Reason: `summarize` accesses `post.text` / `post.created_at` attributes (not dict keys); raw dicts raise `AttributeError` before any assertion runs. Build `Post(**...)` instances from the fixture.
+- Do NOT depend on the developer's `~/.config/thread-analysis/sns-token.json` for AC3a. Reason: a real token on the dev's machine makes the test pass vacuously. Use `mktemp -d` for `--token-path`.

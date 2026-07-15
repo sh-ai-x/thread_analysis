@@ -23,42 +23,59 @@ File paths to create:
     - `refresh_if_needed(token: ThreadsToken) -> ThreadsToken` — refreshes a token if it's within 7 days of expiry.
   - `class ThreadsToken` — frozen dataclass: `access_token: str`, `expires_at: datetime`, `user_id: str`.
   - `class ThreadsClient` — high-level API. Methods:
-    - `__init__(token: ThreadsToken, *, http: HttpClient | None = None)` — accepts an injectable HTTP client for testing.
-    - `list_own_posts(limit: int = 20) -> list[Post]` — paginated, returns most-recent-first.
+    - `__init__(token: ThreadsToken, *, http: HttpClient | None = None, request_timeout: float = 10.0, overall_deadline: float | None = None)` — accepts an injectable HTTP client for testing; propagates `request_timeout` and `overall_deadline` to the injected `http` instance so a stalled endpoint cannot bypass the <2-min runtime bound.
+    - `list_own_posts(limit: int = 20) -> list[Post]` — paginated, returns most-recent-first. Honors the deadline: a hung HTTPS endpoint raises `ThreadsApiError("DEADLINE_EXCEEDED", elapsed=…, timeout=…)` whose message is sanitized (no URL, no token).
   - Token persistence: read/write to `~/.config/thread-analysis/sns-token.json` with `0600` perms. Path overridable via env `THREAD_ANALYSIS_TOKEN_PATH`. **No keyring, no DB** (non-goal NG3).
+    - **Atomic write + symlink refusal contract**: `persist_token` opens `path.tmp` (sibling, `0600`) with `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW`, writes the JSON, fsyncs the file descriptor, closes it, then `os.replace(path.tmp, path)`. Guarantees:
+      1. A pre-existing symlink at `path` cannot capture the access token (O_NOFOLLOW raises OSError → `TokenPathNotSafeError`).
+      2. The rename is atomic on POSIX; concurrent readers see either old or new, never a partial write.
+      3. The persisted file is `0600` (perms on the .tmp file; rename carries them over).
+    - **Read-side defense**: `load_token` opens with `O_RDONLY | O_NOFOLLOW` (refuses to follow a symlink), validates `os.fstat(fd).st_mode & 0o777 == 0o600` on the **opened descriptor** (not via path-string stat — a TOCTOU attacker can swap the file between stat and open), reads, JSON-decodes, returns a `ThreadsToken`. Raises `FileNotFoundError` if missing; raises `TokenPathNotSafeError` on symlink or wrong mode.
     - Public API:
-      - `persist_token(token: ThreadsToken, *, path: Path | None = None) -> Path` — writes the token JSON with `0600` perms and returns the path actually written. `path=None` falls back to env override, then the default `~/.config/thread-analysis/sns-token.json`.
-      - `load_token(*, path: Path | None = None) -> ThreadsToken` — reads the persisted token JSON, asserts the file mode is `0o600` on POSIX (refuses to load a wider-umask file), returns a `ThreadsToken`. `path=None` falls back to env override, then the default. Raises `FileNotFoundError` if no token exists.
+      - `persist_token(token: ThreadsToken, *, path: Path | None = None) -> Path` — atomic write per contract above. `path=None` falls back to env override, then the default.
+      - `load_token(*, path: Path | None = None) -> ThreadsToken` — read per contract above. `path=None` falls back to env override, then the default.
   - All HTTP via a small `HttpClient` protocol so tests can inject `FakeHttpClient`. Use `urllib.request` from stdlib (no extra deps unless justified).
+    - **Timeout contract**: every `HttpClient.get(url)` MUST set a per-request socket timeout AND honor a module-level monotonic deadline. Constructor signature:
+      ```python
+      class HttpClient(Protocol):
+          def __init__(self, *, request_timeout: float = 10.0, overall_deadline: float | None = None) -> None: ...
+          def get(self, url: str, *, params: dict | None = None, headers: dict | None = None) -> HttpResponse: ...
+      ```
+      `overall_deadline` is a monotonic timestamp. On breach, `get` raises `ThreadsApiError("DEADLINE_EXCEEDED", elapsed=…, timeout=…)` — the message MUST NOT include the URL (URLs can carry `access_token` query params). Default `request_timeout=10.0`, `overall_deadline=None` (no deadline).
 - `tests/test_sns_auth.py` — unit tests for `ThreadsAuth` with a `FakeHttpClient`:
-  - `test_authorization_url_returns_state` — `authorization_url([...])` returns a `(url, state)` tuple where `state` is non-empty, url-safe-base64-shaped, and the URL contains the same `state` query param.
-  - `test_exchange_code_state_match` — happy path: state matches, returns a `ThreadsToken`.
-  - `test_exchange_code_state_mismatch_raises` — `expected_state != stored_state` → raises `ValueError` BEFORE any HTTP call to the token endpoint.
+  - `test_authorization_url_returns_state`
+  - `test_exchange_code_state_match`
+  - `test_exchange_code_state_mismatch_raises` — `expected_state != stored_state` → raises `ValueError` BEFORE any HTTP call.
   - `test_exchange_code_state_match_uses_constant_time` — patched `hmac.compare_digest` is invoked (not `==`).
-  - `test_refresh_if_needed_within_7_days` — refresh issued; token in `ThreadsToken` returned.
-  - `test_refresh_if_needed_outside_7_days` — no refresh; original returned.
-- `tests/test_sns_client.py` — unit tests for `ThreadsClient.list_own_posts` with a fixture Threads API response (JSON captured from a real or mocked request).
+  - `test_refresh_if_needed_within_7_days` and `test_refresh_if_needed_outside_7_days`.
+- `tests/test_sns_client.py` — unit tests for `ThreadsClient.list_own_posts`:
+  - `test_list_own_posts_returns_fixture`
+  - `test_list_own_posts_under_deadline`
+  - `test_list_own_posts_deadline_exceeded` — fake http that sleeps past the deadline; expect `ThreadsApiError("DEADLINE_EXCEEDED", ...)` whose message does NOT contain the URL or any token.
 - `tests/test_sns_token_io.py` — unit tests for `persist_token` and `load_token`:
   - `test_persist_creates_0600`
+  - `test_persist_atomic_replace`
+  - `test_persist_refuses_symlink_target`
   - `test_load_round_trips`
-  - `test_load_refuses_wider_umask` — set mode to `0o644`, call `load_token`, expect `PermissionError`.
+  - `test_load_refuses_wider_umask`
+  - `test_load_refuses_symlink`
 
 Non-negotiable rules:
 - TDD: tests first. Mock all HTTP. Do not call real Threads API in unit tests.
 - Token file MUST be created with `0600` perms on POSIX. Assert in a test.
-- `load_token` MUST refuse to read a token file whose POSIX mode is wider than `0o600`. Assert in a test.
-- OAuth state MUST be generated via `secrets.token_urlsafe(32)` (256 bits entropy).
+- `load_token` MUST refuse to read a wider-umask OR symlinked file. Assert in tests.
+- OAuth state MUST be generated via `secrets.token_urlsafe(32)`.
 - OAuth state verification MUST use `hmac.compare_digest` (constant-time).
+- HTTP client MUST honor `request_timeout` and `overall_deadline`. A hung endpoint converts to a sanitized `ThreadsApiError` within the deadline.
 - Do NOT add keyring, DB, or encryption (non-goal NG3 — out of scope for v0).
 - Do NOT add Instagram or any other platform (non-goal NG1).
 - Backward compat: do not change the `Post` dataclass from step 0.
 - Secrets: the test suite must never embed a real access token. Use clearly-fake strings like `"FAKE_TOKEN_..."`.
-- Forbidden substring scans (`'token' in response`) are NOT a substitute for the constant-time state compare and 0600 perm check.
 
 ## Acceptance Criteria
 ```bash
 # AC1: imports
-python -c "from thread_analysis.sns_client import ThreadsAuth, ThreadsClient, ThreadsToken, persist_token, load_token; print('OK')"
+python -c "from thread_analysis.sns_client import ThreadsAuth, ThreadsClient, ThreadsToken, persist_token, load_token; from thread_analysis.sns_client import ThreadsApiError, TokenPathNotSafeError; print('OK')"
 
 # AC2: auth unit tests pass
 pytest tests/test_sns_auth.py -v
@@ -66,13 +83,13 @@ pytest tests/test_sns_auth.py -v
 # AC3: client unit tests pass
 pytest tests/test_sns_client.py -v
 
-# AC4: token I/O unit tests pass
+# AC4: token I/O unit tests pass (atomic + symlink refusal)
 pytest tests/test_sns_token_io.py -v
 
-# AC5: full suite green (no regression)
+# AC5: full suite green
 pytest tests/ -v
 
-# AC6: token persist helper writes a fake token with mode 0600
+# AC6: token persist helper writes a fake token with mode 0600 (atomic, no symlink target)
 python -c "
 import os, stat, tempfile
 from pathlib import Path
@@ -113,6 +130,7 @@ with tempfile.TemporaryDirectory() as td:
 - Do NOT add keyring, sqlite, or any storage beyond the JSON token file. Reason: non-goal NG3.
 - Do NOT add Instagram or any non-Threads platform. Reason: non-goal NG1.
 - Do NOT change the `Post` dataclass from step 0. Reason: backward compat within the phase.
-- Do NOT skip the 0600 perm test (AC6) or the load-refuses-wider-umask test. Reason: token-file perm regression would silently expose a credential.
+- Do NOT skip the 0600 perm / atomic / symlink tests. Reason: token-handling regressions silently expose a credential.
 - Do NOT use string-equality (`==`) for OAuth state comparison. Reason: timing oracle → CSRF.
-- Do NOT generate OAuth state via non-cryptographic randomness (random.random, time.time, uuid4). Reason: predictable → CSRF.
+- Do NOT generate OAuth state via non-cryptographic randomness. Reason: predictable → CSRF.
+- Do NOT emit the URL (or anything containing an `access_token` query param) inside the deadline-exceeded error message. Reason: a stalled endpoint leaks the token via stderr / log lines.
