@@ -9,7 +9,7 @@
     "hooks/lib/worktree-detect.sh",
     "hooks/hooks.json"
   ],
-  "installed_at": "2026-07-14T03:45:22Z",
+  "installed_at": "2026-07-15T16:39:50Z",
   "installed_by": "dev-kit:ci-setup",
   "rules": [
     ".claude/rules/git-workflow.md"
