@@ -54,15 +54,41 @@ pytest tests/test_sns_summarizer.py -v
 # AC3: full suite green
 pytest tests/ -v
 
-# AC4: pure-function check (no obvious side effects)
+# AC4: pure-function check — no forbidden imports AND no forbidden function calls
 python -c "
 import ast, pathlib
 src = pathlib.Path('src/thread_analysis/sns_summarizer.py').read_text()
 tree = ast.parse(src)
-forbidden = {'open', 'urlopen', 'requests', 'urllib', 'subprocess', 'print'}
+
+# (a) forbidden by top-level import
+forbidden_imports = {'requests', 'urllib', 'urllib3', 'httpx', 'subprocess'}
 imports = {n.name.split('.')[0] for x in ast.walk(tree) if isinstance(x, (ast.Import, ast.ImportFrom)) for n in x.names}
-leak = imports & forbidden
-assert not leak, f'leaky import: {leak}'
+imp_leak = imports & forbidden_imports
+assert not imp_leak, f'forbidden import: {sorted(imp_leak)}'
+
+# (b) forbidden by qualified function call (e.g. subprocess.run, os.system, pathlib.Path.write_text)
+forbidden_calls = {
+    ('subprocess', 'run'), ('subprocess', 'Popen'), ('subprocess', 'call'),
+    ('os', 'system'), ('os', 'popen'), ('os', 'exec'),
+    ('pathlib', 'write_text'), ('pathlib', 'write_bytes'),
+}
+calls = []
+for x in ast.walk(tree):
+    if isinstance(x, ast.Call) and isinstance(x.func, ast.Attribute):
+        v, a = x.func.value, x.func.attr
+        if isinstance(v, ast.Name):
+            calls.append((v.id, a))
+        elif isinstance(v, ast.Attribute) and isinstance(v.value, ast.Name):
+            calls.append((v.value.id, a))
+call_leak = set(calls) & forbidden_calls
+assert not call_leak, f'forbidden call: {sorted(call_leak)}'
+
+# (c) forbidden builtins used as bare-name calls (e.g. open(...), print(...))
+forbidden_builtins = {'print', 'open', 'input'}
+builtin_calls = {(None, x.func.id) for x in ast.walk(tree)
+                 if isinstance(x, ast.Call) and isinstance(x.func, ast.Name) and x.func.id in forbidden_builtins}
+assert not builtin_calls, f'forbidden builtin call: {sorted(builtin_calls)}'
+
 print('OK')
 "
 ```
@@ -73,17 +99,15 @@ print('OK')
    - **Success** → `"status": "completed"`, `"summary": "<one-line: files created/modified + key decisions>"`
    - **Unrecoverable failure** (3 retries exhausted) → `"status": "error"`, `"error_message": "<concrete error: which AC failed, with exit code + last 3 lines>"`
    - **External dependency** (API key, manual config, human approval) → `"status": "blocked"`, `"blocked_reason": "<what's needed>"`, then STOP — do not continue to the next step.
-3. Emit EXACTLY these two HTML-comment markers as the **last two lines** of the final reply. The build runner parses them with the regex in `lib/execute.py:parse_status_marker()`:
-
-```
-<!-- status: completed | error | blocked -->
-<!-- summary: <one-line outcome> | error_message: <concrete error> | blocked_reason: <what's needed> -->
-```
-
-   The marker value MUST match the `status` field written to `index.json` in step 2. If the marker is missing or malformed, the runner falls back to the index.json status (so the contract is best-effort, not blocking).
+3. **Status reporting contract — v0 (in-repo, what THIS PR enforces):** the
+   installed runner reads the step's status from the JSON file written in
+   step 2 above; it does not currently parse HTML-comment markers. See
+   `step0.md` for the full forward-compatibility note. Sub-agents SHOULD
+   still emit the `<!-- status: ... -->` and `<!-- summary: ... -->`
+   markers as the last two lines of their reply.
 
 ## Don't
-- Do NOT call any external service, LLM, or network in this module. Reason: pure-function contract; side effects kill testability.
+- Do NOT call any external service, LLM, or network in this module. Reason: pure-function contract; side effects kill testability. AC4 enforces this statically (imports + calls + builtins).
 - Do NOT add NLTK, spaCy, or other NLP libs. Reason: stdlib-only keeps the surface small and the install light.
 - Do NOT change `Post` or `Summary` field shapes. Reason: backward compat with step 0.
 - Do NOT add storage, scheduling, or Instagram support. Reason: non-goals NG1/NG3/NG4.

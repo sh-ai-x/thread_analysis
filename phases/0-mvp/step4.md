@@ -21,11 +21,11 @@ Track A — **deterministic** (runs in CI without a real Threads account):
 - Build a fixture of 20 representative `Post` records (mix of topics, lengths, engagement values, timestamps). Save as `tests/fixtures/sns_20_posts.json`.
 - Add `tests/test_sns_e2e.py` that:
   1. Loads the fixture.
-  2. Constructs a `ThreadsClient` whose `list_own_posts` returns the fixture (inject via constructor — already supported in step 1).
-  3. Runs `cli_main([])` via the test seam (inject token + factory).
-  4. Asserts exit 0, asserts all 5 section headers present, asserts `Total posts analyzed: 20`.
+  2. Constructs a `ThreadsClient` whose `list_own_posts` returns the fixture (inject via the `http` client seam from step 1, OR by monkeypatching `ThreadsClient.list_own_posts` in the test — pick the one your step 1 implementation supports).
+  3. Runs `cli_main(['--limit', '20'])` via the test seam and asserts exit 0.
+  4. Asserts all 5 section headers present in the captured output, asserts `Total posts analyzed: 20`.
   5. Asserts `format_text(summary)` round-trips a known golden file `tests/fixtures/sns_expected_text.txt`. Update the golden if format changed during step 3; commit both.
-- Wall-clock measurement: time `cli_main` with the injected client + 20-post fixture, assert wall-clock < 5 seconds (loose upper bound — the real <2 min target is a manual run with live API). This protects against accidental O(n²) regressions in `summarize`.
+- Wall-clock measurement: time `cli_main(['--limit', '20'])` end-to-end with the injected fixture, assert wall-clock < 5 seconds (loose upper bound — the real <2 min target is a manual run with live API). **Time the wired CLI, NOT just `summarize(posts)` in isolation** — a regression in cli orchestration / formatting / IO would be invisible otherwise.
 
 Track B — **manual / live** (NOT in CI):
 - Document in `docs/SNS_RUNBOOK.md` (new file):
@@ -57,20 +57,26 @@ pytest tests/test_sns_e2e.py -v
 # AC2: full suite green
 pytest tests/ -v
 
-# AC3: wall-clock of full pipeline with injected 20-post fixture is <5s
+# AC3: end-to-end cli_main with injected 20-post fixture completes in <5s
 python -c "
-import time
-from thread_analysis.sns_summarizer import summarize
-import json
-posts = json.loads(open('tests/fixtures/sns_20_posts.json').read())
-posts = [{**p, 'created_at': __import__('datetime').datetime.fromisoformat(p['created_at'])} for p in posts]
-from thread_analysis.sns_summarizer import summarize as s
-# Re-import Post:
-from thread_analysis.sns_analyzer import Post
-posts = [Post(**p) for p in posts]
+import json, time
+from datetime import datetime
+from pathlib import Path
+from thread_analysis.sns_analyzer import cli_main
+from thread_analysis import sns_client
+
+raw = json.loads(Path('tests/fixtures/sns_20_posts.json').read_text())
+posts = [{**p, 'created_at': datetime.fromisoformat(p['created_at'])} for p in raw]
+
+# Inject via monkeypatch: replace list_own_posts on the live class.
+def _fake_list(self, limit=20):
+    return posts[:limit]
+sns_client.ThreadsClient.list_own_posts = _fake_list
+
 t0 = time.perf_counter()
-summary = s(posts)
+rc = cli_main(['--limit', '20'])
 elapsed = time.perf_counter() - t0
+assert rc == 0, f'cli_main exit={rc}'
 assert elapsed < 5.0, f'too slow: {elapsed:.3f}s'
 print(f'OK elapsed={elapsed:.3f}s')
 "
@@ -91,14 +97,12 @@ grep -q "SNS Analyzer" README.md && echo "OK"
    - **Success** → `"status": "completed"`, `"summary": "<one-line: files created/modified + key decisions>"`
    - **Unrecoverable failure** (3 retries exhausted) → `"status": "error"`, `"error_message": "<concrete error: which AC failed, with exit code + last 3 lines>"`
    - **External dependency** (API key, manual config, human approval) → `"status": "blocked"`, `"blocked_reason": "<what's needed>"`, then STOP — do not continue to the next step.
-3. Emit EXACTLY these two HTML-comment markers as the **last two lines** of the final reply. The build runner parses them with the regex in `lib/execute.py:parse_status_marker()`:
-
-```
-<!-- status: completed | error | blocked -->
-<!-- summary: <one-line outcome> | error_message: <concrete error> | blocked_reason: <what's needed> -->
-```
-
-   The marker value MUST match the `status` field written to `index.json` in step 2. If the marker is missing or malformed, the runner falls back to the index.json status (so the contract is best-effort, not blocking).
+3. **Status reporting contract — v0 (in-repo, what THIS PR enforces):** the
+   installed runner reads the step's status from the JSON file written in
+   step 2 above; it does not currently parse HTML-comment markers. See
+   `step0.md` for the full forward-compatibility note. Sub-agents SHOULD
+   still emit the `<!-- status: ... -->` and `<!-- summary: ... -->`
+   markers as the last two lines of their reply.
 
 ## Don't
 - Do NOT call the real Threads API in tests or in fixtures. Reason: determinism + secret-scan.
@@ -106,4 +110,5 @@ grep -q "SNS Analyzer" README.md && echo "OK"
 - Do NOT change `cli_main` or `summarize` signatures in this step. Reason: this is verification, not refactor.
 - Do NOT add storage, scheduling, or Instagram support. Reason: non-goals NG1/NG3/NG4.
 - Do NOT skip the runbook. Reason: Track B is the only path that proves the PRD's <2-min target.
+- Do NOT time `summarize(posts)` in isolation in AC3. Reason: cli orchestration / formatting / IO regressions would be invisible. The AC must time `cli_main` end-to-end with the injected fixture.
 - Do NOT silently update the golden text file. If it changed, document the why in the step summary.

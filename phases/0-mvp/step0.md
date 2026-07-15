@@ -57,14 +57,28 @@ python -c "from thread_analysis.sns_analyzer import cli_main; assert cli_main(['
    - **Success** → `"status": "completed"`, `"summary": "<one-line: files created/modified + key decisions>"`
    - **Unrecoverable failure** (3 retries exhausted) → `"status": "error"`, `"error_message": "<concrete error: which AC failed, with exit code + last 3 lines>"`
    - **External dependency** (API key, manual config, human approval) → `"status": "blocked"`, `"blocked_reason": "<what's needed>"`, then STOP — do not continue to the next step.
-3. Emit EXACTLY these two HTML-comment markers as the **last two lines** of the final reply. The build runner parses them with the regex in `lib/execute.py:parse_status_marker()`:
+3. **Status reporting contract — v0 (in-repo, what THIS PR enforces):** the
+   installed runner (the dev-kit plugin's `lib/execute.py`) reads the
+   step's status from the `phases/0-mvp/index.json` file written in step 2
+   above. It does **not** currently parse the HTML-comment markers below;
+   that capability (`parse_status_marker`) ships in a separate follow-up PR
+   against the dev-kit plugin, **not** in this repository. Until that
+   lands, status comes from the JSON file plus the sub-agent's exit code;
+   the HTML-comment markers below are documented for forward compatibility
+   only.
+
+   Sub-agents SHOULD still emit these markers on the last two lines of
+   their reply so that, once the runner catches up, no plan amendments
+   are required:
 
 ```
 <!-- status: completed | error | blocked -->
 <!-- summary: <one-line outcome> | error_message: <concrete error> | blocked_reason: <what's needed> -->
 ```
 
-   The marker value MUST match the `status` field written to `index.json` in step 2. If the marker is missing or malformed, the runner falls back to the index.json status (so the contract is best-effort, not blocking).
+   When the marker parser lands, the marker value MUST match the `status`
+   field written to `index.json` in step 2. If they disagree, the runner
+   falls back to the index.json status (so the contract is best-effort).
 
 ## Don't
 - Do NOT modify `src/thread_analysis/analyzer.py` — it analyzes thread *structures* (replies/participants), a different domain. Reason: scope leak.

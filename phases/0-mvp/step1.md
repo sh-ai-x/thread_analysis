@@ -26,6 +26,7 @@ File paths to create:
     - `__init__(token: ThreadsToken, *, http: HttpClient | None = None)` — accepts an injectable HTTP client for testing.
     - `list_own_posts(limit: int = 20) -> list[Post]` — paginated, returns most-recent-first.
   - Token persistence: read/write to `~/.config/thread-analysis/sns-token.json` with `0600` perms. Path overridable via env `THREAD_ANALYSIS_TOKEN_PATH`. **No keyring, no DB** (non-goal NG3).
+    - Public API: `persist_token(token: ThreadsToken, *, path: Path | None = None) -> Path` — writes the token JSON with `0600` perms and returns the path actually written. `path=None` falls back to env override, then the default `~/.config/thread-analysis/sns-token.json`.
   - All HTTP via a small `HttpClient` protocol so tests can inject `FakeHttpClient`. Use `urllib.request` from stdlib (no extra deps unless justified).
 - `tests/test_sns_auth.py` — unit tests for `ThreadsAuth` with a `FakeHttpClient` (mock token exchange, refresh).
 - `tests/test_sns_client.py` — unit tests for `ThreadsClient.list_own_posts` with a fixture Threads API response (JSON captured from a real or mocked request).
@@ -41,7 +42,7 @@ Non-negotiable rules:
 ## Acceptance Criteria
 ```bash
 # AC1: imports
-python -c "from thread_analysis.sns_client import ThreadsAuth, ThreadsClient, ThreadsToken; print('OK')"
+python -c "from thread_analysis.sns_client import ThreadsAuth, ThreadsClient, ThreadsToken, persist_token; print('OK')"
 
 # AC2: auth unit tests pass
 pytest tests/test_sns_auth.py -v
@@ -52,18 +53,25 @@ pytest tests/test_sns_client.py -v
 # AC4: full suite green (no regression)
 pytest tests/ -v
 
-# AC5: token file perms — sanity check the helper writes 0600
+# AC5: token persist helper writes a fake token with mode 0600
 python -c "
-import os, tempfile
-from thread_analysis.sns_client import ThreadsToken
+import os, stat, tempfile
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
-p = tempfile.mkstemp(prefix='sns-tok-')[1]
-os.chmod(p, 0o600)
-# helper should NOT loosen this perm
-import stat
-mode = stat.S_IMODE(os.stat(p).st_mode)
-assert mode == 0o600, f'expected 0600, got {oct(mode)}'
-print('OK')
+from thread_analysis.sns_client import ThreadsToken, persist_token
+
+with tempfile.TemporaryDirectory() as td:
+    p = Path(td) / 'sns-token.json'
+    tok = ThreadsToken(
+        access_token='FAKE_TOKEN_' + 'x' * 8,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        user_id='0',
+    )
+    persist_token(tok, path=p)
+    assert p.exists(), 'token file not created'
+    mode = stat.S_IMODE(os.stat(p).st_mode)
+    assert mode == 0o600, f'expected 0600, got {oct(mode)}'
+    print('OK')
 "
 ```
 
@@ -73,14 +81,13 @@ print('OK')
    - **Success** → `"status": "completed"`, `"summary": "<one-line: files created/modified + key decisions>"`
    - **Unrecoverable failure** (3 retries exhausted) → `"status": "error"`, `"error_message": "<concrete error: which AC failed, with exit code + last 3 lines>"`
    - **External dependency** (API key, manual config, human approval) → `"status": "blocked"`, `"blocked_reason": "<what's needed>"`, then STOP — do not continue to the next step.
-3. Emit EXACTLY these two HTML-comment markers as the **last two lines** of the final reply. The build runner parses them with the regex in `lib/execute.py:parse_status_marker()`:
-
-```
-<!-- status: completed | error | blocked -->
-<!-- summary: <one-line outcome> | error_message: <concrete error> | blocked_reason: <what's needed> -->
-```
-
-   The marker value MUST match the `status` field written to `index.json` in step 2. If the marker is missing or malformed, the runner falls back to the index.json status (so the contract is best-effort, not blocking).
+3. **Status reporting contract — v0 (in-repo, what THIS PR enforces):** the
+   installed runner (the dev-kit plugin's `lib/execute.py`) reads the
+   step's status from the JSON file written in step 2 above; it does not
+   currently parse HTML-comment markers. See `step0.md` for the full
+   forward-compatibility note. Sub-agents SHOULD still emit the
+   `<!-- status: ... -->` and `<!-- summary: ... -->` markers as the last
+   two lines of their reply.
 
 ## Don't
 - Do NOT call the real Threads API in unit tests. Reason: determinism, cost, and test isolation.
@@ -88,4 +95,4 @@ print('OK')
 - Do NOT add keyring, sqlite, or any storage beyond the JSON token file. Reason: non-goal NG3.
 - Do NOT add Instagram or any non-Threads platform. Reason: non-goal NG1.
 - Do NOT change the `Post` dataclass from step 0. Reason: backward compat within the phase.
-- Do NOT skip the 0600 perm test. Reason: token file is the only secret in v0; sloppy perms = compromise.
+- Do NOT skip the 0600 perm test (AC5). Reason: token file is the only secret in v0; a chmod-the-tempfile hack would not catch a real regression where the helper falls back to a wider umask.
