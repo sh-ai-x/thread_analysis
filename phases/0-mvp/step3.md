@@ -48,6 +48,7 @@ File paths to create / modify:
     ) -> int
     ```
     **m-12 decision**: drop `client_factory` and `token_persister`. Rationale: step 4's offline AC3b uses `posts_loader` (which bypasses `ThreadsClient` entirely); step 3's AC6 uses `token_loader`. `client_factory` is unreachable from any AC; `token_persister` is for the OAuth bootstrap flow that no step covers. Removing them keeps the seam surface minimal-and-testable.
+    - **Seam precedence (M4)**: when `posts_loader is not None`, the function uses **only** `posts_loader` — the auth path (token load, OAuth bootstrap, `ThreadsClient` construction) is bypassed entirely; `token_loader` is ignored. When `posts_loader is None`, the function falls through to the auth path and consults `token_loader` (or the default `load_token`). Document this precedence in the `cli_main` docstring so the build runner does not guess.
 - `src/thread_analysis/sns_output.py` (new) — `format_text(summary: Summary) -> str`, `format_json(summary: Summary) -> str`. Pure functions.
 - `tests/test_sns_output.py` (new) — unit tests for both formatters; Section 1 renders `(count)` from `topic_counts`.
 - `tests/test_sns_analyzer.py` (extend) — add `test_cli_with_injected_token`, `test_cli_help_exits_zero_via_translate`, `test_cli_invalid_flag_exits_64`, `test_cli_no_auth_bootstrap_returns_1`.

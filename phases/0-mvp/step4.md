@@ -120,28 +120,33 @@ grep -q "SNS Analyzer" README.md && echo "OK"
 test -f scripts/log_incident.py && grep -q '\{10,\}' scripts/log_incident.py && echo "regex_floor_OK"
 pytest tests/test_log_incident.py -v
 
-# AC8: CI content scan of runbook + fixtures for any token-shaped strings (M9)
+# AC8: CI content scan of runbook + fixtures for any token-shaped strings (M9, m2)
 python -c "
 import re, pathlib
 roots = [pathlib.Path('docs/SNS_RUNBOOK.md'),
          pathlib.Path('tests/fixtures/sns_20_posts.json'),
          pathlib.Path('tests/fixtures/sns_expected_text.txt')]
-pattern = re.compile(r'[A-Za-z0-9_-]{10,}')
-# Filter out false positives: pytest assertion strings, hex-like commit shas, fixture timestamps.
+# m2: length+shape filter — any 16+ char [A-Za-z0-9_-]+ run that is NOT a known
+# false positive (pytest assertion string, hex commit sha, ISO-8601 timestamp)
+# is a candidate. Outside tests/test_* the candidate MUST NOT appear.
+pattern = re.compile(r'[A-Za-z0-9_-]{16,}')
+SAFE_LINE_FRAGMENTS = (
+    'pytest', 'assert ', 'commit', 'tree ', 'object', 'author ',
+    'T19:', 'T20:', 'datetime', 'isoformat', 'sns_', 'subprocess',
+    'thread_analysis', 'O_EXCL', 'O_NOFOLLOW', 'hmac', 'secrets',
+)
 hits = []
 for r in roots:
     if not r.exists():
         continue
-    text = r.read_text()
-    # only flag lines that LOOK like a real access token: starts with 'THR_' or 'FAKE_TOKEN_'
-    for ln in text.splitlines():
-        s = pattern.search(ln)
-        if s and ('THR_' in s.group(0) or 'FAKE_TOKEN_' in s.group(0)):
-            # Disallow outside tests/test_* (those are expected to embed fakes).
-            if not r.name.startswith('test_'):
-                hits.append((str(r), ln[:80]))
-assert not hits, f'token-shaped string in a non-test artifact: {hits}'
-print('OK (no live-token-shaped strings in runbook/fixtures)')
+    for ln in r.read_text().splitlines():
+        for m in pattern.finditer(ln):
+            tok = m.group(0)
+            if any(safe in ln for safe in SAFE_LINE_FRAGMENTS):
+                continue
+            hits.append((str(r), ln[:80], tok))
+assert not hits, f'token-shaped string in a non-test artifact: {hits[:3]}...'
+print('OK (m2 length+shape content scan: no live-token-shaped strings)')
 "
 ```
 

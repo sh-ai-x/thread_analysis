@@ -31,7 +31,7 @@ File paths to create:
   - `test_cli_no_args_exits_zero` — `cli_main([])` returns 0 and prints "not yet implemented".
   - `test_post_and_summary_dataclasses_exist` — imports `Post` and `Summary` (from `sns_types`, OR re-exported from `sns_analyzer`) and asserts field names match the contract below.
 - `tests/test_sns_types.py` — separate test file pinning the sns_types module:
-  - `test_post_and_summary_field_contracts` — pin the dataclass fields, including `topic_counts` from step 1's M5 spec.
+  - `test_post_and_summary_field_contracts` — pin the dataclass fields, including `topic_counts: dict[str, int]` (introduced in step 2's summarize() spec).
 
 Do NOT touch:
 - `src/thread_analysis/analyzer.py`

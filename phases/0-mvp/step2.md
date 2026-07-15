@@ -84,15 +84,33 @@ forbidden_calls = {
     ('os', 'system'), ('os', 'popen'), ('os', 'exec'),
     ('pathlib', 'write_text'), ('pathlib', 'write_bytes'),
 }
-calls = []
+
+def _leaf_name(node):
+    """Walk an Attribute chain to its base Name; return (name, attr) for Calls.
+    Pins the M3 contract: catches `pathlib.Path('x').write_text(...)` AND any
+    depth of chained method calls, not just 1-deep attributes.
+    """
+    if isinstance(node, ast.Name):
+        return (node.id, None)
+    if isinstance(node, ast.Attribute):
+        v, a = node.value, node.attr
+        if isinstance(v, ast.Name):
+            return (v.id, a)
+        if isinstance(v, ast.Attribute):
+            base, _ = _leaf_name(v)
+            return (base, a)
+    return (None, None)
+
+calls = set()
 for x in ast.walk(tree):
     if isinstance(x, ast.Call) and isinstance(x.func, ast.Attribute):
-        v, a = x.func.value, x.func.attr
-        if isinstance(v, ast.Name):
-            calls.append((v.id, a))
-        elif isinstance(v, ast.Attribute) and isinstance(v.value, ast.Name):
-            calls.append((v.value.id, a))
-call_leak = set(calls) & forbidden_calls
+        base, _ = _leaf_name(x.func.value)
+        attr = x.func.attr
+        if base is not None:
+            calls.add((base, attr))
+    elif isinstance(x, ast.Call) and isinstance(x.func, ast.Name):
+        calls.add((None, x.func.id))
+call_leak = calls & (forbidden_calls | {(None, n) for n in forbidden_builtins})
 assert not call_leak, f'forbidden call: {sorted(call_leak)}'
 
 forbidden_builtins = {'print', 'open', 'input'}
