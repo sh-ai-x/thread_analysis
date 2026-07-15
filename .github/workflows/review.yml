@@ -280,11 +280,13 @@ jobs:
             echo "verdict=Approve" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Branch A: only consider comments created within this run's wall-clock window.
+          RUN_START="${{ github.run.started_at }}"
           verdict="$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq '.[] | select((.user.login // "") | startswith("claude")) | .body' \
-            | grep -E 'Verdict: (Approve|Blocked|Changes Requested)' | tail -1 \
-            | grep -oE 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' \
-            | sed -E 's/.*Verdict:[[:space:]]*//' || true)"
+            --jq --arg start "$RUN_START" \
+              '[.[] | select((.user.login // "") | startswith("claude")) | select(.created_at > $start) | .body] | .[]' \
+            | grep -E 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' | tail -1 \
+            | grep -oE '(Approve|Blocked|Changes Requested)' || true)"
           echo "review_verdict=${verdict:-<none>}"
           echo "verdict=${verdict:-}" >> "$GITHUB_OUTPUT"
 
@@ -492,11 +494,13 @@ jobs:
             echo "verdict=Approve" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Branch A: only consider comments created within this run's wall-clock window.
+          RUN_START="${{ github.run.started_at }}"
           verdict="$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq '.[] | select((.user.login // "") | startswith("claude")) | .body' \
-            | grep -E 'Verdict: (Approve|Blocked|Changes Requested)' | tail -1 \
-            | grep -oE 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' \
-            | sed -E 's/.*Verdict:[[:space:]]*//' || true)"
+            --jq --arg start "$RUN_START" \
+              '[.[] | select((.user.login // "") | startswith("claude")) | select(.created_at > $start) | .body] | .[]' \
+            | grep -E 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' | tail -1 \
+            | grep -oE '(Approve|Blocked|Changes Requested)' || true)"
           echo "security_verdict=${verdict:-<none>}"
           echo "verdict=${verdict:-}" >> "$GITHUB_OUTPUT"
 
