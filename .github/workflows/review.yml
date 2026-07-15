@@ -120,8 +120,8 @@ jobs:
         if: steps.provider.outputs.provider == 'minimax'
         env:
           ANTHROPIC_BASE_URL: ${{ env.MINIMAX_BASE_URL }}
-          ANTHROPIC_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
-          ANTHROPIC_AUTH_TOKEN: ${{ secrets.MINIMAX_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.MINMAX_API_KEY }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.MINMAX_API_KEY }}
           ANTHROPIC_MODEL: 'MiniMax-M3[1m]'
           ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M3[1m]'
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M3[1m]'
@@ -270,8 +270,8 @@ jobs:
         if: steps.provider.outputs.provider == 'minimax'
         env:
           ANTHROPIC_BASE_URL: ${{ env.MINIMAX_BASE_URL }}
-          ANTHROPIC_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
-          ANTHROPIC_AUTH_TOKEN: ${{ secrets.MINIMAX_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.MINMAX_API_KEY }}
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.MINMAX_API_KEY }}
           ANTHROPIC_MODEL: 'MiniMax-M3[1m]'
           ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M3[1m]'
           ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M3[1m]'
