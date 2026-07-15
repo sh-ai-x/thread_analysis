@@ -29,19 +29,33 @@ Claude Code skill for solo creator self-analysis of own Threads posts. v0 = "Pul
 
 The runner will:
 1. Read `phases/0-mvp/index.json`.
-2. **Operate on a single cumulative worktree** — checks out `plan/sns-thread-analysis` directly (no per-step worktree cut). After each step's AC passes and `index.json` is updated, the runner fast-forwards the same branch on origin (`git push origin HEAD`) so step N+1 begins with a working tree that includes step N's commits.
-   - **Why cumulative and not per-step-worktree:** the per-step-worktree strategy (e.g. `plan/sns-thread-analysis-step0` … `step4`) cannot carry step N-1's commits into the step N worktree without an extra merge/cherry-pick between phases, which adds a layer of branch-management the v0 plan does not need. A single cumulative branch keeps the run audit trail in one linear history and makes the final PR diff exactly equal to the cumulative step history.
-   - **Trade-off:** the runner's working tree is shared across all steps. It MUST run tests + commit + push before advancing; partial state from a failed step pollutes step N+1's AC baseline. Per iron law L1, this is enforced by the tdd-guard hook (red→green guard never advances on red).
+2. **Run on a single cumulative worktree** — checks out `plan/sns-thread-analysis` directly. After each step's AC passes and `index.json` is updated, the runner publishes the step's commits upstream (the same branch on origin) so step N+1 begins with a working tree that includes step N's commits. **See "Known limitations" below** for the carry-into-step-N+1 contract.
 3. Execute the per-step TDD cycle from `phases/0-mvp/step<N>.md`.
 4. Capture status markers, update `index.json`, advance to step N+1.
+
+## Known limitations (cross-repo / build-time, not product non-goals)
+
+These are **build-time concerns, not user-facing NG1–NG6**. They are documented here so the build runner / a follow-up PR can address them. They are NOT blockers per PRD §4.1 (which sets the runner-contract scope upstream of this repo), but they constrain how the runner must evolve for `0-mvp` to execute:
+
+1. **C-1 / M-2 — Per-step worktree vs cumulative:**
+   `~/.claude/plugins/cache/dev-kit/dev-kit/<v>/lib/execute.py:339` does `git worktree add -B <branch> <wt> origin/main` for every step. Each step's worktree branches from `origin/main`, NOT from the previous step's tip. Without a propagation mechanism, step N+1 cannot see step N's commits.
+
+   The hand-off's "cumulative single worktree" guidance above is the **target** behavior; the current runner does not implement it. To make `0-mvp` executable end-to-end, the runner must either:
+   - (a) be modified to integrate step N's branch into origin/main between step executions (a fetch-and-merge or fast-forward sync, ahead of step N+1's worktree creation), OR
+   - (b) introduce a worktree-base override that respects `index.json["worktree"]` as a base ref (not just a name).
+
+   This is a follow-up PR against dev-kit, NOT this PR. The plan continues to document the cumulative strategy because that is what `phases/0-mvp/index.json["worktree"]: "plan/sns-thread-analysis"` says. A runner that follows `index.json["worktree"]` semantics faithfully WILL pick up step N+1 from the prior step's tip (because every step N publishes back to that branch).
+
+2. **M-6 — Live <2-min enforcement in CI:**
+   The PRD's <2-min target is a live Threads account metric. CI cannot enforce it without a test Threads account + OAuth secret. Track A's <5s wall-clock covers the inside-CI bound; Track B's <2-min is a runbook-only sign-off. To gate Track B in CI: provision a fixture Threads account (test-account-oauth flow + reduced-quota sandbox) and add a `Track B live-time job` that requires `@repo:secrets:THREADS_TEST_TOKEN`.
 
 ## What the build runner MUST honor
 
 - **methodology = tdd** (default per `CLAUDE.md` §2). Each step's `## Acceptance Criteria` block lists the verification commands; tdd-guard will block non-TDD PRs.
-- **Scope discipline**: NG1–NG6. The runner should reject any step that grows Instagram / cross-account / storage / generation surface.
-- **Backward compat within the phase**: step 0's `cli_main(["--help"])` contract, the `Post` and `Summary` dataclass shapes, and the `cli_main` exit-code contract from step 3 must be preserved end-to-end.
-- **No real access tokens** in any test fixture or runbook. secret-scan will fail CI.
-- **TDD**: tests first. step 1's `0600` perm test is non-negotiable.
+- **Scope discipline**: NG1–NG6. The runner should reject any step that grows instagram / cross-account / storage / generation surface.
+- **Backward compat within the phase**: step 0's `cli_main(["--help"])` contract, the `Post` and `Summary` dataclass shapes (now in `sns_types` after the M11 split), and the `cli_main` exit-code contract from step 3 must be preserved end-to-end.
+- **No real access tokens** in any test fixture or runbook. `secret-scan` will fail CI.
+- **TDD**: tests first. step 1's `0600` perm + `os.fstat(fd)` test is non-negotiable.
 
 ## Files emitted by plan
 - `PRD.md`
@@ -52,8 +66,8 @@ The runner will:
 - `.dev-kit/hand-off/plan→build.md` (this file)
 
 ## Open risks (informational, not blocking)
-- **Threads API rate limits**: not measured. Step 4's runbook asks the user to record wall-clock and any rate-limit incidents. If <2 min fails on real account, the spec survives but the kill criterion (used <2×/week) becomes the real test.
-- **OAuth UX**: bootstrap prints URL + prompts the user. In a fully scripted environment, this is a UX gap. Acceptable for v0 (1 user, 1 setup).
-- **Tone-tag heuristics**: chosen by simple rules, no LLM. May feel naïve. If so, post-MVP can swap in an LLM call (out of v0 scope per non-goals).
+- **Threads API rate limits**: not measured. Step 4's runbook asks the user to record wall-clock and any rate-limit incidents.
+- **OAuth UX**: bootstrap prints URL + prompts the user. Acceptable for v0.
+- **Tone-tag heuristics**: chosen by simple rules, no LLM. May feel naïve; post-MVP can swap in an LLM call.
 
-## Status: ready for build.
+## Status: ready for build (with known build-time limitations per "Known limitations" section above).
