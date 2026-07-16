@@ -77,6 +77,13 @@ fi
 if [ "$task_intent" = "0" ] && printf '%s' "$LOWER" | grep -qE "(new (feature|task|endpoint|function|module|hook|skill)|feature request|bug report)"; then
   task_intent=1
 fi
+# Korean task prompts need the same worktree reminder. Require a code or
+# repository noun as well as an action word to avoid nudging on ordinary chat.
+if [ "$task_intent" = "0" ] \
+  && printf '%s' "$LOWER" | grep -qE '(수정|해결|구현|추가|변경|만들|작업)' \
+  && printf '%s' "$LOWER" | grep -qE '(hook|브랜치|worktree|레포|repo|코드|파일|에러|오류|기능)'; then
+  task_intent=1
+fi
 
 [ "$task_intent" = "1" ] || exit 0
 
@@ -90,7 +97,7 @@ esac
 
 # In main checkout + new-task intent → emit additionalContext nudge.
 BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo detached)"
-NUDGE="GIT-WORKFLOW REMINDER (.claude/rules/git-workflow.md): the user prompt looks like a new task and the session cwd is the main checkout (branch='$BRANCH'). Per the rule, every task = new worktree + new session + new branch. Before editing, the user should: (1) git fetch origin main && git pull --ff-only origin main; (2) git worktree add -b <type>/<slug> .claude/worktrees/<slug> origin/main; (3) open a new Claude Code session inside that worktree path. If the user explicitly says 'do it now without a worktree', confirm the override before editing — worktree-guard.sh will block edits in the main checkout otherwise."
+NUDGE="GIT-WORKFLOW REMINDER (rules/git-workflow.md): the user prompt looks like a new task and the session cwd is the main checkout (branch='$BRANCH'). Per the rule, every task = new worktree + client handoff + new branch. Before editing: (1) git fetch origin main && git pull --ff-only origin main; (2) git worktree add -b <type>/<slug> .worktrees/<slug> origin/main; (3) Claude Code opens a new session in that path; Codex spawns/hand-offs a subagent with that path as cwd and passes the task prompt explicitly. If the user explicitly says 'do it now without a worktree', confirm the override before editing — worktree-guard.sh will block edits in the main checkout otherwise."
 
 jq -nc --arg ctx "$NUDGE" \
   '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:$ctx}}'
