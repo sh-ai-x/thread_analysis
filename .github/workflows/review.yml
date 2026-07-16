@@ -101,6 +101,28 @@ jobs:
           test -d ~/.claude/plugins/marketplaces/dev-kit/skills/security
           echo "dev-kit plugin installed: $(readlink ~/.claude/plugins/marketplaces/dev-kit || echo 'real')"
 
+          # Register the marketplace + plugin in the SDK's settings so that
+          # slash commands (/dev-kit:review, /dev-kit:security) are visible
+          # to the Claude Code SDK. Without this, the SDK returns
+          # 0 turns / $0 cost (slash commands not resolved).
+          mkdir -p ~/.claude
+          cat > ~/.claude/settings.json <<'SETTINGS_EOF'
+          {
+            "enabledMcpjsonServers": {},
+            "enabledMcpServers": {},
+            "marketplaces": {
+              "dev-kit": {
+                "source": "directory",
+                "path": "$HOME/.claude/plugins/marketplaces/dev-kit"
+              }
+            },
+            "plugins": {
+              "dev-kit@dev-kit": { "enabled": true }
+            }
+          }
+          SETTINGS_EOF
+          echo "::notice::dev-kit marketplace + plugin registered in ~/.claude/settings.json"
+
       - name: Resolve PR + provider
         id: provider
         env:
@@ -250,6 +272,28 @@ jobs:
           test -d ~/.claude/plugins/marketplaces/dev-kit/skills/review
           test -d ~/.claude/plugins/marketplaces/dev-kit/skills/security
           echo "dev-kit plugin installed: $(readlink ~/.claude/plugins/marketplaces/dev-kit || echo 'real')"
+
+          # Register the marketplace + plugin in the SDK's settings so that
+          # slash commands (/dev-kit:review, /dev-kit:security) are visible
+          # to the Claude Code SDK. Without this, the SDK returns
+          # 0 turns / $0 cost (slash commands not resolved).
+          mkdir -p ~/.claude
+          cat > ~/.claude/settings.json <<'SETTINGS_EOF'
+          {
+            "enabledMcpjsonServers": {},
+            "enabledMcpServers": {},
+            "marketplaces": {
+              "dev-kit": {
+                "source": "directory",
+                "path": "$HOME/.claude/plugins/marketplaces/dev-kit"
+              }
+            },
+            "plugins": {
+              "dev-kit@dev-kit": { "enabled": true }
+            }
+          }
+          SETTINGS_EOF
+          echo "::notice::dev-kit marketplace + plugin registered in ~/.claude/settings.json"
 
       - name: Resolve PR + provider
         id: provider
