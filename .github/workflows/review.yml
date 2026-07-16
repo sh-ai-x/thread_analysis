@@ -152,7 +152,11 @@ jobs:
         with:
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
-            /dev-kit:review --diff ${{ github.repository }}/pull/${{ steps.provider.outputs.pr_number }}
+            Load the /dev-kit:review skill from
+            $HOME/.claude/plugins/marketplaces/dev-kit/skills/review/SKILL.md
+            (use the Read tool). Follow its protocol. After analysis, post the
+            Layer-2 summary as a single PR comment via:
+              gh pr comment "${{ steps.provider.outputs.pr_number }}" --body "..."
 
             Render the standard two-layer output (PR summary at top, per-finding
             inline comments). The summary MUST begin with a single line exactly
@@ -176,7 +180,11 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
-            /dev-kit:review --diff ${{ github.repository }}/pull/${{ steps.provider.outputs.pr_number }}
+            Load the /dev-kit:review skill from
+            $HOME/.claude/plugins/marketplaces/dev-kit/skills/review/SKILL.md
+            (use the Read tool). Follow its protocol. After analysis, post the
+            Layer-2 summary as a single PR comment via:
+              gh pr comment "${{ steps.provider.outputs.pr_number }}" --body "..."
 
             Render the standard two-layer output. The summary MUST begin with:
 
@@ -200,7 +208,11 @@ jobs:
         with:
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
-            /dev-kit:review --diff ${{ github.repository }}/pull/${{ steps.provider.outputs.pr_number }}
+            Load the /dev-kit:review skill from
+            $HOME/.claude/plugins/marketplaces/dev-kit/skills/review/SKILL.md
+            (use the Read tool). Follow its protocol. After analysis, post the
+            Layer-2 summary as a single PR comment via:
+              gh pr comment "${{ steps.provider.outputs.pr_number }}" --body "..."
 
             Render the standard two-layer output. The summary MUST begin with:
 
@@ -324,7 +336,11 @@ jobs:
         with:
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
-            /dev-kit:security --diff ${{ github.repository }}/pull/${{ steps.provider.outputs.pr_number }}
+            Load the /dev-kit:security skill from
+            $HOME/.claude/plugins/marketplaces/dev-kit/skills/security/SKILL.md
+            (use the Read tool). Follow its protocol. After analysis, post the
+            security summary as a single PR comment via:
+              gh pr comment "${{ steps.provider.outputs.pr_number }}" --body "..."
 
             Render the security summary (per-category breakdown table + Verdict).
             The summary MUST begin with a single line exactly of the form:
@@ -347,7 +363,11 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
-            /dev-kit:security --diff ${{ github.repository }}/pull/${{ steps.provider.outputs.pr_number }}
+            Load the /dev-kit:security skill from
+            $HOME/.claude/plugins/marketplaces/dev-kit/skills/security/SKILL.md
+            (use the Read tool). Follow its protocol. After analysis, post the
+            security summary as a single PR comment via:
+              gh pr comment "${{ steps.provider.outputs.pr_number }}" --body "..."
 
             Render the security summary. The summary MUST begin with:
 
@@ -371,7 +391,11 @@ jobs:
         with:
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
-            /dev-kit:security --diff ${{ github.repository }}/pull/${{ steps.provider.outputs.pr_number }}
+            Load the /dev-kit:security skill from
+            $HOME/.claude/plugins/marketplaces/dev-kit/skills/security/SKILL.md
+            (use the Read tool). Follow its protocol. After analysis, post the
+            security summary as a single PR comment via:
+              gh pr comment "${{ steps.provider.outputs.pr_number }}" --body "..."
 
             Render the security summary. The summary MUST begin with:
 
