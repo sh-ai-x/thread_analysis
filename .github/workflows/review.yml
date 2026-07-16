@@ -250,7 +250,7 @@ jobs:
           # We match either to stay forward-compatible if/when the override is
           # removed in a future run.
           verdict="$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq --arg since "${{ github.run_started_at }}" \
+            --jq --arg since "${{ github.event.pull_request.updated_at }}" \
               '.[] | select((.user.login == "github-actions[bot]" or .user.login == "claude[bot]") and .created_at > $since) | .body' \
             | grep -E 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' | tail -1 \
             | grep -oE 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' \
@@ -423,7 +423,7 @@ jobs:
           # Comment author filter: see review-job "Extract review verdict"
           # for the github_token override explanation.
           verdict="$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq --arg since "${{ github.run_started_at }}" \
+            --jq --arg since "${{ github.event.pull_request.updated_at }}" \
               '.[] | select((.user.login == "github-actions[bot]" or .user.login == "claude[bot]") and .created_at > $since) | .body' \
             | grep -E 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' | tail -1 \
             | grep -oE 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' \
