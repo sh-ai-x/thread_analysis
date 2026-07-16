@@ -150,7 +150,6 @@ jobs:
           ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M3[1m]'
         uses: anthropics/claude-code-action@v1
         with:
-          show_full_output: true  # DEBUG: see what LLM is doing
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
             Load the /dev-kit:review skill from
@@ -172,13 +171,13 @@ jobs:
               - major >= 1, critical = 0   -> **Verdict:** Changes Requested
               - no critical, no major      -> **Verdict:** Approve
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+            --max-duration 1500000
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
 
       - name: Run /dev-kit:review via Claude Code opt-in
         if: steps.provider.outputs.provider == 'anthropic'
         uses: anthropics/claude-code-action@v1
         with:
-          show_full_output: true  # DEBUG: see what LLM is doing
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
@@ -194,7 +193,8 @@ jobs:
               **Verdict:** Changes Requested
               **Verdict:** Blocked
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+            --max-duration 1500000
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
 
       - name: Run /dev-kit:review via DeepSeek
         if: steps.provider.outputs.provider == 'deepseek'
@@ -208,7 +208,6 @@ jobs:
           ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash'
         uses: anthropics/claude-code-action@v1
         with:
-          show_full_output: true  # DEBUG: see what LLM is doing
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
             Load the /dev-kit:review skill from
@@ -223,7 +222,8 @@ jobs:
               **Verdict:** Changes Requested
               **Verdict:** Blocked
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+            --max-duration 1500000
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
 
       - name: Extract review verdict
         id: extract_verdict
@@ -337,7 +337,6 @@ jobs:
           ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M3[1m]'
         uses: anthropics/claude-code-action@v1
         with:
-          show_full_output: true  # DEBUG: see what LLM is doing
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
             Load the /dev-kit:security skill from
@@ -358,13 +357,13 @@ jobs:
               - major >= 1, critical = 0   -> **Verdict:** Changes Requested
               - no critical, no major      -> **Verdict:** Approve
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+            --max-duration 1500000
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
 
       - name: Run /dev-kit:security via Claude Code opt-in
         if: steps.provider.outputs.provider == 'anthropic'
         uses: anthropics/claude-code-action@v1
         with:
-          show_full_output: true  # DEBUG: see what LLM is doing
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
@@ -380,7 +379,8 @@ jobs:
               **Verdict:** Changes Requested
               **Verdict:** Blocked
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+            --max-duration 1500000
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
 
       - name: Run /dev-kit:security via DeepSeek
         if: steps.provider.outputs.provider == 'deepseek'
@@ -394,7 +394,6 @@ jobs:
           ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash'
         uses: anthropics/claude-code-action@v1
         with:
-          show_full_output: true  # DEBUG: see what LLM is doing
           track_progress: ${{ github.event_name == 'pull_request' }}
           prompt: |
             Load the /dev-kit:security skill from
@@ -409,7 +408,8 @@ jobs:
               **Verdict:** Changes Requested
               **Verdict:** Blocked
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+            --max-duration 1500000
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
 
       - name: Extract security verdict
         id: extract_verdict
