@@ -243,14 +243,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -uo pipefail
           # Comment author filter: with the github_token override on the action,
           # the bot identity is github-actions[bot] (not Anthropic's claude[bot]).
           # We match either to stay forward-compatible if/when the override is
           # removed in a future run.
+          #
+          # 'since' = HEAD commit timestamp (author date, ISO 8601). The agent
+          # cannot post a comment BEFORE the commit it is reviewing lands, so
+          # this filter reliably scopes verdict extraction to comments from
+          # the current run while excluding stale comments from prior runs.
+          # Using github.event.pull_request.updated_at is unreliable because
+          # posting a PR comment itself updates that field.
+          since="$(git log -1 --format=%aI "${HEAD_SHA}")"
           verdict="$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq --arg since "${{ github.event.pull_request.updated_at }}" \
+            --jq --arg since "$since" \
               '.[] | select((.user.login == "github-actions[bot]" or .user.login == "claude[bot]") and .created_at > $since) | .body' \
             | grep -E 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' | tail -1 \
             | grep -oE 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' \
@@ -418,12 +427,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -uo pipefail
           # Comment author filter: see review-job "Extract review verdict"
           # for the github_token override explanation.
+          #
+          # 'since' = HEAD commit timestamp (author date, ISO 8601). See the
+          # review-job comment for why this is preferred over
+          # github.event.pull_request.updated_at (which self-updates when
+          # the agent posts its own verdict comment).
+          since="$(git log -1 --format=%aI "${HEAD_SHA}")"
           verdict="$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq --arg since "${{ github.event.pull_request.updated_at }}" \
+            --jq --arg since "$since" \
               '.[] | select((.user.login == "github-actions[bot]" or .user.login == "claude[bot]") and .created_at > $since) | .body' \
             | grep -E 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' | tail -1 \
             | grep -oE 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' \
