@@ -92,7 +92,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-      id-token: write
     env:
       MINIMAX_BASE_URL: https://api.minimax.io/anthropic
       # Used by the consumer-install branch of the install step below when
@@ -251,7 +250,7 @@ jobs:
           # We match either to stay forward-compatible if/when the override is
           # removed in a future run.
           verdict="$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq '.[] | select((.user.login // "") | (startswith("github-actions") or startswith("claude"))) | .body' \
+            --jq '.[] | select(.user.login == "github-actions[bot]" or .user.login == "claude[bot]") | .body' \
             | grep -E 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' | tail -1 \
             | grep -oE 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' \
             | sed -E 's/.*Verdict:[[:space:]]*//' || true)"
@@ -272,7 +271,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-      id-token: write
     env:
       MINIMAX_BASE_URL: https://api.minimax.io/anthropic
       DEV_KIT_GITHUB_TOKEN: ${{ secrets.DEV_KIT_GITHUB_TOKEN }}
@@ -424,7 +422,7 @@ jobs:
           # Comment author filter: see review-job "Extract review verdict"
           # for the github_token override explanation.
           verdict="$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq '.[] | select((.user.login // "") | (startswith("github-actions") or startswith("claude"))) | .body' \
+            --jq '.[] | select(.user.login == "github-actions[bot]" or .user.login == "claude[bot]") | .body' \
             | grep -E 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' | tail -1 \
             | grep -oE 'Verdict:[[:space:]]*(Approve|Blocked|Changes Requested)' \
             | sed -E 's/.*Verdict:[[:space:]]*//' || true)"
@@ -499,28 +497,3 @@ jobs:
             Blocked) echo "::error::Blocked (review=$R security=$S)"; exit 1 ;;
             *) echo "::error::Unparseable verdict '$worst' (review=$R security=$S)"; exit 1 ;;
           esac
-
-      - name: Auto-approve on Approve verdict
-        if: success() && github.event_name == 'pull_request_target'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          # Only auto-approve on Approve (lowest severity — no 🔴 critical,
-          # no 🟠 major). Fail-open: if the API rejects (GitHub's default
-          # GITHUB_TOKEN cannot approve PRs), log a warning. Set APPROVE_TOKEN
-          # secret to a PAT with 'repo' scope for real auto-approval.
-          R="${{ needs.review.outputs.verdict }}"
-          S="${{ needs.security.outputs.verdict }}"
-          rank() { case "$1" in Blocked) echo 2 ;; "Changes"*) echo 1 ;; Approve) echo 0 ;; *) echo 99 ;; esac; }
-          r=$(rank "$R"); s=$(rank "$S")
-          worst=$([ "$r" -ge "$s" ] && echo "$R" || echo "$S")
-          if [ "$worst" = "Approve" ]; then
-            echo "Verdict is Approve — attempting auto-approve."
-            TOKEN="${APPROVE_TOKEN:-$GH_TOKEN}"
-            gh pr review "$PR_NUMBER" --approve \
-              --body "Auto-approved by /dev-kit:review + /dev-kit:security: lowest severity (no 🔴 critical, no 🟠 major)." \
-              || echo "::warning::gh pr review --approve rejected. Set APPROVE_TOKEN secret to a PAT for real auto-approval; verdict itself was Approve."
-          else
-            echo "Verdict is '$worst' -- not auto-approving."
-          fi
