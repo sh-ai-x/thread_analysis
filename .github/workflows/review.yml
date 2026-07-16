@@ -171,8 +171,8 @@ jobs:
               - major >= 1, critical = 0   -> **Verdict:** Changes Requested
               - no critical, no major      -> **Verdict:** Approve
           claude_args: |
-            --max-duration 1500000
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
+            --max-turns 100
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Read,Grep,Glob"
 
       - name: Run /dev-kit:review via Claude Code opt-in
         if: steps.provider.outputs.provider == 'anthropic'
@@ -193,8 +193,8 @@ jobs:
               **Verdict:** Changes Requested
               **Verdict:** Blocked
           claude_args: |
-            --max-duration 1500000
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
+            --max-turns 100
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Read,Grep,Glob"
 
       - name: Run /dev-kit:review via DeepSeek
         if: steps.provider.outputs.provider == 'deepseek'
@@ -222,8 +222,8 @@ jobs:
               **Verdict:** Changes Requested
               **Verdict:** Blocked
           claude_args: |
-            --max-duration 1500000
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
+            --max-turns 100
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Read,Grep,Glob"
 
       - name: Extract review verdict
         id: extract_verdict
@@ -357,8 +357,8 @@ jobs:
               - major >= 1, critical = 0   -> **Verdict:** Changes Requested
               - no critical, no major      -> **Verdict:** Approve
           claude_args: |
-            --max-duration 1500000
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
+            --max-turns 100
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Read,Grep,Glob"
 
       - name: Run /dev-kit:security via Claude Code opt-in
         if: steps.provider.outputs.provider == 'anthropic'
@@ -379,8 +379,8 @@ jobs:
               **Verdict:** Changes Requested
               **Verdict:** Blocked
           claude_args: |
-            --max-duration 1500000
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
+            --max-turns 100
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Read,Grep,Glob"
 
       - name: Run /dev-kit:security via DeepSeek
         if: steps.provider.outputs.provider == 'deepseek'
@@ -408,8 +408,8 @@ jobs:
               **Verdict:** Changes Requested
               **Verdict:** Blocked
           claude_args: |
-            --max-duration 1500000
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Bash(grep*),Bash(find*),Read,Grep,Glob,Edit"
+            --max-turns 100
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff*),Bash(git log*),Read,Grep,Glob"
 
       - name: Extract security verdict
         id: extract_verdict
